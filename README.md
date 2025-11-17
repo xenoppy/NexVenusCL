@@ -80,8 +80,8 @@ sudo reboot
 #### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
-cd p2p_ibgda
+git clone https://github.com/nex-agi/NexVenusCL.git
+cd NexVenusCL
 ```
 
 #### 2. Build the Project
