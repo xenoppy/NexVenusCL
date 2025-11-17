@@ -1,0 +1,96 @@
+cmake_minimum_required(VERSION 3.19)
+
+set(CUSTOM_TRANSPORT_VERSION_MAJOR @TRANSPORT_VERSION_MAJOR@)
+set(CUSTOM_TRANSPORT_VERSION_MINOR @TRANSPORT_VERSION_MINOR@)
+set(CUSTOM_TRANSPORT_VERSION_PATCH @TRANSPORT_VERSION_PATCH@)
+
+if (DEFINED ENV{CUDA_HOME})
+  set(CUDA_HOME_DEFAULT $ENV{CUDA_HOME})
+else()
+  set(CUDA_HOME_DEFAULT "/usr/local/cuda")
+endif()
+
+option(NVSHMEM_BUILD_IBGDA_TRANSPORT "Enable compilation of the ibgda transport" ON)
+
+set(CUDA_HOME ${CUDA_HOME_DEFAULT} CACHE PATH "path to CUDA installation")
+
+# Allow users to set the CUDA toolkit through the env.
+if(NOT CUDAToolkit_Root AND NOT CMAKE_CUDA_COMPILER)
+  message(STATUS "CUDA_HOME: ${CUDA_HOME}")
+  set(CUDAToolkit_Root ${CUDA_HOME} CACHE PATH "Root of Cuda Toolkit." FORCE)
+  set(CMAKE_CUDA_COMPILER "${CUDA_HOME}/bin/nvcc" CACHE PATH "Root of Cuda Toolkit." FORCE)
+endif()
+
+project(
+  NVSHMEM_TRANSPORTS
+  LANGUAGES CUDA CXX C
+  VERSION ${CUSTOM_TRANSPORT_VERSION_MAJOR}.${CUSTOM_TRANSPORT_VERSION_MINOR}.${CUSTOM_TRANSPORT_VERSION_PATCH}
+)
+
+find_package(CUDAToolkit)
+
+if(NVSHMEM_BUILD_IBGDA_TRANSPORT)
+  find_library(MLX5_lib NAMES mlx5)
+endif()
+
+add_subdirectory(common)
+
+macro(nvshmem_transport_set_base_config LIBNAME)
+  target_compile_definitions(${LIBNAME}
+    PRIVATE $<$<CONFIG:Debug>:_NVSHMEM_DEBUG;NVSHMEM_IBGDA_DEBUG>
+    $<IF:$<STREQUAL:"${CMAKE_HOST_SYSTEM_PROCESSOR}","x86_64">,NVSHMEM_X86_64,>
+    $<IF:$<STREQUAL:"${CMAKE_HOST_SYSTEM_PROCESSOR}","ppc64le">,__STDC_LIMIT_MACROS;__STDC_CONSTANT_MACROS;NVSHMEM_PPC64LE,>
+    $<IF:$<STREQUAL:"${CMAKE_HOST_SYSTEM_PROCESSOR}","aarch64">,NVSHMEM_AARCH64,>
+  )
+endmacro()
+
+macro(nvshmem_transport_set_ib_config TRANSPORT_NAME)
+  target_link_libraries(${TRANSPORT_NAME} PRIVATE nvshmem_transport_ib_common)
+endmacro()
+
+macro(nvshmem_transport_set_mlx5_config TRANSPORT_NAME)
+    target_link_libraries(${TRANSPORT_NAME} PRIVATE MLX5_lib)
+endmacro()
+
+macro(nvshmem_add_transport TRANSPORT_NAME SOURCE_LIST CUDA_FLAG IB_FLAG MLX5_FLAG)
+  add_library(${TRANSPORT_NAME} SHARED)
+
+  nvshmem_transport_set_base_config(${TRANSPORT_NAME})
+
+  target_sources(${TRANSPORT_NAME} PRIVATE ${SOURCE_LIST})
+  target_include_directories(${TRANSPORT_NAME} PRIVATE
+                             ${CMAKE_SOURCE_DIR}/common
+                             ${CMAKE_SOURCE_DIR}/include
+                             ${CUDAToolkit_INCLUDE_DIRS}
+  )
+  set_target_properties(${TRANSPORT_NAME}
+    PROPERTIES PREFIX ""
+    VERSION ${CUSTOM_TRANSPORT_VERSION_MAJOR}.${CUSTOM_TRANSPORT_VERSION_MINOR}.${CUSTOM_TRANSPORT_VERSION_PATCH}
+    SOVERSION ${CUSTOM_TRANSPORT_VERSION_MAJOR}
+  )
+  target_link_options(${TRANSPORT_NAME} PRIVATE
+                      "-Wl,--version-script=${CMAKE_SOURCE_DIR}/src/nvshmem_transport.sym")
+
+  target_link_libraries(${TRANSPORT_NAME} PRIVATE nvshmem_transport_common)
+
+  if(${CUDA_FLAG})
+    target_link_libraries(${TRANSPORT_NAME} PRIVATE CUDA::cudart_static)
+  endif()
+
+  if(${IB_FLAG})
+    nvshmem_transport_set_ib_config(${TRANSPORT_NAME})
+  endif()
+
+  if(${MLX5_FLAG})
+    nvshmem_transport_set_mlx5_config(${TRANSPORT_NAME})
+  endif()
+
+  install(TARGETS ${TRANSPORT_NAME}
+    LIBRARY DESTINATION lib
+  )
+endmacro()
+
+if(NVSHMEM_BUILD_IBGDA_TRANSPORT)
+  add_subdirectory(ibgda)
+endif()
+
