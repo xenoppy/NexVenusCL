@@ -230,6 +230,8 @@ int setup_connections(const std::vector<std::string> &remote_tag_vec,
     }
 
     auto conn_str = pcomm->get_local_conn_handle();
+    // Persist the connection blob per peer; remote side reads its counterpart
+    // and calls connect_endpoint to finalize RC links.
     save_string_to_file(
         tmp_path(local_tag + "-" + remote_tag + "-conn_handle.txt"), conn_str);
     comm_map[remote_tag] = pcomm;

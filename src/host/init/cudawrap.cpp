@@ -89,6 +89,8 @@ static int cudaPfnFuncLoader(struct nvshmemi_cuda_fn_table *table) {
   LOAD_SYM(table, cuMulticastGetGranularity, 12010, , 1);
   LOAD_SYM(table, cuStreamWriteValue64, 11070, _v2, 1);
   LOAD_SYM(table, cuStreamWaitValue64, 11070, _v2, 1);
+  // All symbols above are optional/required depending on driver version; we
+  // stop early if a mandatory symbol is missing to surface a clear init error.
   return NVSHMEMI_SUCCESS;
 }
 

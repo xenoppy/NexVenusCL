@@ -159,6 +159,8 @@ int P2PComm::init() {
   // create all qps and rc_handle for rcs
   status = trans->host_ops.create_qps(trans, selected_devices, 1, &rc_handles,
                                       &rc_handles_len, &num_dci_eps);
+  // rc_handles is a contiguous blob containing both local/remote connection
+  // descriptors; each side slices its half using chunk_size below.
   NVSHMEMI_NZ_ERROR_JMP(status, NVSHMEMX_ERROR_INTERNAL, out,
                         "connect EPS failed \n");
   status =
@@ -175,6 +177,8 @@ int P2PComm::register_memory(void *dptr, size_t size) {
   if (!NVSHMEMI_TRANSPORT_OPS_IS_GET_MEM(trans)) {
     return 0;
   }
+  // Cache the transport-exported mem handle (lkey/rkey) for this PE; later
+  // copied into device state for verbs access.
   return trans->host_ops.get_mem_handle(
       (nvshmem_mem_handle_t *)(&(mem_handle[pe])), nullptr, dptr, size, trans,
       false);
@@ -213,6 +217,8 @@ int P2PComm::connect_endpoint(const std::string &conn_handle) {
 
   size_t chunk_size = rc_handles_len / 2;
   assert(conn_handle.size() == chunk_size);
+  // Copy remote half of the RC handle blob into our buffer; local half was
+  // filled during create_qps.
   memcpy((char *)rc_handles + pe * chunk_size, conn_handle.data(), chunk_size);
 
   status =
@@ -255,7 +261,8 @@ static int convert_device_state(p2pcomm_ibgda_device_state_t &p2p_st,
   p2p_st.num_rc_per_pe = nvshmem_st.num_rc_per_pe;
   p2p_st.rc_map_type = nvshmem_st.rc_map_type;
   p2p_st.num_devices_initialized = nvshmem_st.num_devices_initialized;
-  // underlying mem_handle layout: struct nvshmemt_ib_common_mem_handle
+    // underlying mem_handle layout: struct nvshmemt_ib_common_mem_handle; we
+    // only pick the lkey/rkey words the device-side verbs need.
   p2p_st.lkey.key = htobe32(*((int32_t *)(&mem_handle[pe]) + 5));
   p2p_st.rkey.key = htobe32(*((int32_t *)(&mem_handle[1 ^ pe]) + 6));
   INFO(NVSHMEM_INIT, "p2pcomm convert_device_state lkey: %u, rkey: %u.",
@@ -271,6 +278,7 @@ int P2PComm::update_device_state_d() {
   p2pcomm_ibgda_device_state_t tmp;
   convert_device_state(tmp, nvshmemi_ibgda_device_state, pe, num_dci_eps,
                        mem_handle);
+  // Push the current host snapshot into the device-visible state struct.
   status =
       cudaMemcpy(p2pcomm_device_state_d, (void *)&tmp,
                  sizeof(p2pcomm_ibgda_device_state_t), cudaMemcpyHostToDevice);

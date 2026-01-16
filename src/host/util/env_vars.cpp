@@ -56,6 +56,7 @@ int nvshmemi_options_init(void) {
   if (!nvshmemi_options_inited) {
     ret = nvshmemi_env_options_init(&nvshmemi_options);
     nvshmemi_options_inited = true;
+    // Options are idempotent; repeated calls after the first return fast.
     return (ret);
   } else {
     /* Options already inited */

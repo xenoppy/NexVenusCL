@@ -256,6 +256,8 @@ inline int register_memory_and_save_handles(p2p_comm::P2PComm &comm, void *buf,
   }
 
   auto mem_str = comm.get_local_mem_handle();
+    // Persist both the serialized mem handle (lkey/rkey) and the GPU pointer so
+    // the peer can reconstruct remote access parameters via tmp files.
   save_string_to_file(
       tmp_path(local_tag + "-" + remote_tag + "-mem_handle.txt"), mem_str);
   save_pointer_to_file(

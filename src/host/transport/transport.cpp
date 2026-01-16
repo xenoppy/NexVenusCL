@@ -81,6 +81,8 @@ int nvshmemi_transport_init(nvshmem_transport_t *transport, void *device_state,
       assert(NVSHMEM_TRANSPORT_MAJOR_MINOR_VERSION((*transport)->api_version) <=
              NVSHMEM_TRANSPORT_MAJOR_MINOR_VERSION(
                  NVSHMEM_TRANSPORT_INTERFACE_VERSION));
+      // IBGDA plugin filled host_ops; set base metadata that core code relies
+      // on (heap base, device state pointer, cap table size, etc.).
       (*transport)->heap_base = nullptr;
       (*transport)->log2_cumem_granularity =
           20; // make it 1MB by default for IBGDA

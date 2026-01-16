@@ -130,6 +130,8 @@ __global__ void p2p_server_poll_kernel(void *local_buf, size_t flag_offset) {
 int setup_p2p_connection(P2PComm &comm, const std::string &self_prefix,
                          const std::string &peer_prefix) {
   auto conn_str = comm.get_local_conn_handle();
+  // Export local RC connection blob; peer will mirror-read before calling
+  // connect_endpoint.
   save_string_to_file(tmp_path(self_prefix + "-conn_handle.txt"), conn_str);
 
   sleep(10);
@@ -191,6 +193,8 @@ BufferSetup setup_buffers(P2PComm &comm, bool is_client,
   }
 
   auto mem_handle = comm.get_local_mem_handle();
+  // Write mem handle + device pointer so the peer can issue RDMA against this
+  // buffer.
   save_string_to_file(tmp_path(self_prefix + "-mem_handle.txt"), mem_handle);
   sleep(5);
 
