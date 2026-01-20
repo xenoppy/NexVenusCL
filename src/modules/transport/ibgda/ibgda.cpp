@@ -211,6 +211,13 @@ struct ibgda_ep {
   uint32_t user_index;
 };
 
+/*
+ * 打印 IBGDA 端点 (End Point) 信息
+ *
+ * @param ep 指向 ibgda_ep 结构体的指针，包含端点信息
+ * @param offset 端点在数组中的偏移量或索引
+ * @param log_level 日志级别
+ */
 static void print_ibgda_ep(struct ibgda_ep *ep, int offset, int log_level) {
   TRACE(log_level,
         "print_ibgda_ep: ibgda_ep offset=%d; qp_type:%d, qpn=%u, portid=%d, "
@@ -228,6 +235,12 @@ struct ibgda_mem_handle {
   int num_devs;
 };
 
+/*
+ * 打印 IBGDA 内存句柄信息
+ *
+ * @param handle 指向 ibgda_mem_handle 结构体的指针
+ * @param log_level 日志级别
+ */
 static void print_ibgda_mem_handle(struct ibgda_mem_handle *handle,
                                    int log_level) {
   for (int i = 0; i < handle->num_devs; ++i) {
@@ -253,6 +266,14 @@ struct ibgda_rc_handle {
   uint64_t iid;
 };
 
+/*
+ * 打印 IBGDA RC (Reliable Connected) 句柄信息
+ *
+ * @param handle 指向 ibgda_rc_handle 结构体数组的指针
+ * @param num 句柄的数量
+ * @param pe 处理单元 (PE) 索引
+ * @param log_level 日志级别
+ */
 static void print_ibgda_rc_handle(struct ibgda_rc_handle *handle, int num,
                                   int pe, int log_level) {
   for (int i = 0; i < num; ++i) {
@@ -386,6 +407,12 @@ static bool use_gdrcopy = 0;
 static ibgda_mem_type_t ibgda_nic_buf_location;
 static ibgda_nic_handler_t ibgda_nic_handler;
 
+/*
+ * 打印 GUID (Global Unique Identifier)
+ *
+ * @param idv_gid 指向 GID 数据的指针
+ * @param log_level 日志级别
+ */
 static void print_guid(const unsigned char *idv_gid, int log_level) {
   TRACE(log_level,
         "print_guid: "
@@ -399,6 +426,13 @@ static void print_guid(const unsigned char *idv_gid, int log_level) {
         idv_gid[15]);
 }
 
+/*
+ * 解析 QP (Queue Pair) 映射方式字符串
+ *
+ * @param out_map_by 输出参数，存储解析后的映射类型
+ * @param str 输入的映射方式字符串 (如 "cta", "sm", "warp", "dct")
+ * @return 成功返回 0，否则返回错误码
+ */
 static int
 ibgda_parse_qp_map_by(nvshmemi_ibgda_device_qp_map_type_t *out_map_by,
                       const char *str) {
@@ -432,6 +466,13 @@ ibgda_parse_qp_map_by(nvshmemi_ibgda_device_qp_map_type_t *out_map_by,
   return status;
 }
 
+/*
+ * 解析 NIC 处理程序请求字符串
+ *
+ * @param out_loc 输出参数，存储解析后的处理程序类型
+ * @param str 输入的请求字符串 (如 "auto", "gpu", "cpu")
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_parse_nic_handler_request(ibgda_nic_handler_t *out_loc,
                                            const char *str) {
   int status = 0;
@@ -462,6 +503,11 @@ static int ibgda_parse_nic_handler_request(ibgda_nic_handler_t *out_loc,
   return status;
 }
 
+/*
+ * 获取主机页大小
+ *
+ * @return 主机页大小 (字节)
+ */
 static size_t ibgda_get_host_page_size() {
   static size_t host_page_size = 0;
   if (!host_page_size)
@@ -469,11 +515,26 @@ static size_t ibgda_get_host_page_size() {
   return host_page_size;
 }
 
+/*
+ * 显示 IBGDA 传输层信息 (未实现)
+ *
+ * @param transport 传输层对象指针
+ * @param style 显示样式
+ * @return 始终返回 0
+ */
 int nvshmemt_ibgda_show_info(struct nvshmem_transport *transport, int style) {
   NVSHMEMI_ERROR_PRINT("ibgda show info not implemented");
   return 0;
 }
 
+/*
+ * 获取设备的 PCI 路径
+ *
+ * @param dev 设备索引
+ * @param pci_path 输出参数，指向存储 PCI 路径字符串的指针
+ * @param t 传输层对象句柄
+ * @return 成功返回 NVSHMEMX_SUCCESS，否则返回错误码
+ */
 static int get_pci_path(int dev, char **pci_path, nvshmem_transport_t t) {
   int status = NVSHMEMX_SUCCESS;
 
@@ -493,6 +554,14 @@ out:
   return status;
 }
 
+/*
+ * 检查是否可以访问对等端 (Peer)
+ *
+ * @param access 输出参数，存储访问权限
+ * @param peer_info 对等端信息
+ * @param t 传输层对象句柄
+ * @return 成功返回 0，否则返回错误码
+ */
 int nvshmemt_ibgda_can_reach_peer(int *access,
                                   struct nvshmem_transport_pe_info *peer_info,
                                   nvshmem_transport_t t) {
@@ -504,6 +573,17 @@ int nvshmemt_ibgda_can_reach_peer(int *access,
   return status;
 }
 
+/*
+ * 获取内存句柄
+ *
+ * @param mem_handle 输出参数，存储获取到的内存句柄
+ * @param mem_handle_in输入参数，可能包含已有的内存句柄信息
+ * @param buf 缓冲区指针
+ * @param length 缓冲区长度
+ * @param t 传输层对象句柄
+ * @param local_only 是否仅限本地访问
+ * @return 成功返回 0，否则返回错误码
+ */
 int nvshmemt_ibgda_get_mem_handle(nvshmem_mem_handle_t *mem_handle,
                                   nvshmem_mem_handle_t *mem_handle_in,
                                   void *buf, size_t length,
@@ -700,6 +780,17 @@ out:
   return status;
 }
 
+/*
+ * 获取内存句柄 v2
+ *
+ * @param mem_handle 输出参数，存储获取到的内存句柄
+ * @param mem_handle_in 输入参数，可能包含已有的内存句柄信息
+ * @param buf 缓冲区指针
+ * @param length 缓冲区长度
+ * @param t 传输层对象句柄
+ * @param local_only 是否仅限本地访问
+ * @return 成功返回 0，否则返回错误码
+ */
 int nvshmemt_ibgda_get_mem_handle_v2(nvshmem_mem_handle_t *mem_handle,
                                      nvshmem_mem_handle_t *mem_handle_in,
                                      void *buf, size_t length,
@@ -756,6 +847,15 @@ out:
   return status;
 }
 
+/*
+ * 将内存对象映射到 NIC (Network Interface Card)
+ *
+ * @param mobject 内存对象指针
+ * @param context IBV 上下文指针
+ * @param access 访问权限标志
+ * @param use_dmabuf 是否使用 DMA-BUF
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_mobject_nic_map(struct ibgda_mem_object *mobject,
                                  struct ibv_context *context, uint32_t access,
                                  bool use_dmabuf = false) {
@@ -818,6 +918,11 @@ out:
   return status;
 }
 
+/*
+ * 解除内存对象在 NIC 上的映射
+ *
+ * @param mobject 内存对象指针
+ */
 static void ibgda_mobject_nic_unmap(struct ibgda_mem_object *mobject) {
   int status = 0;
 
@@ -837,6 +942,15 @@ out:
   return;
 }
 
+/*
+ * 分配 GPU 内存并初始化内存对象
+ *
+ * @param pmobject 输出参数，指向分配的内存对象的指针
+ * @param size 分配大小
+ * @param alignment 对齐大小
+ * @param host_mapping 是否需要主机映射
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_gpu_mem_alloc(struct ibgda_mem_object **pmobject, size_t size,
                                size_t alignment, bool host_mapping) {
   int status = 0;
@@ -915,6 +1029,11 @@ out:
   return status;
 }
 
+/*
+ * 释放 GPU 内存对象
+ *
+ * @param mobject 内存对象指针
+ */
 static void ibgda_gpu_mem_free(struct ibgda_mem_object *mobject) {
   int status = 0;
 
@@ -929,6 +1048,15 @@ static void ibgda_gpu_mem_free(struct ibgda_mem_object *mobject) {
   free(mobject);
 }
 
+/*
+ * 分配主机内存并初始化内存对象
+ *
+ * @param pmobject 输出参数，指向分配的内存对象的指针
+ * @param size 分配大小
+ * @param alignment 对齐大小
+ * @param gpu_mapping 是否需要 GPU 映射
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_host_mem_alloc(struct ibgda_mem_object **pmobject, size_t size,
                                 size_t alignment, bool gpu_mapping) {
   int status;
@@ -989,6 +1117,12 @@ out:
   return status;
 }
 
+/*
+ * 释放主机内存对象
+ *
+ * @param mobject 内存对象指针
+ */
+
 static void ibgda_host_mem_free(struct ibgda_mem_object *mobject) {
   cudaError_t status;
 
@@ -1007,6 +1141,14 @@ static void ibgda_host_mem_free(struct ibgda_mem_object *mobject) {
   free(mobject);
 }
 
+/*
+ * 将 NIC 内存映射到 GPU
+ *
+ * @param pmobject 输出参数，指向分配的内存对象的指针
+ * @param uar UAR (User Access Region) 指针
+ * @param size 映射大小
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_nic_mem_gpu_map(struct ibgda_mem_object **pmobject,
                                  struct mlx5dv_devx_uar *uar, size_t size) {
   int status = 0;
@@ -1066,6 +1208,11 @@ out:
   return status;
 }
 
+/*
+ * 解除 NIC 内存的 GPU 映射
+ *
+ * @param mobject 内存对象指针
+ */
 static void ibgda_nic_mem_gpu_unmap(struct ibgda_mem_object *mobject) {
   cudaError_t status;
 
@@ -1080,6 +1227,14 @@ static void ibgda_nic_mem_gpu_unmap(struct ibgda_mem_object *mobject) {
   free(mobject);
 }
 
+/*
+ * 将 NIC 内存映射到 CPU
+ *
+ * @param pmobject 输出参数，指向分配的内存对象的指针
+ * @param uar UAR 指针
+ * @param size 映射大小
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_nic_mem_cpu_map(struct ibgda_mem_object **pmobject,
                                  struct mlx5dv_devx_uar *uar, size_t size) {
   int status = 0;
@@ -1108,12 +1263,25 @@ out:
   return status;
 }
 
+/*
+ * 解除 NIC 内存的 CPU 映射
+ *
+ * @param mobject 内存对象指针
+ */
 static void ibgda_nic_mem_cpu_unmap(struct ibgda_mem_object *mobject) {
   assert(mobject->mem_type == IBGDA_MEM_TYPE_NIC);
 
   free(mobject);
 }
 
+/*
+ * 分配 NIC 控制内存
+ *
+ * @param pmobject 输出参数，指向分配的内存对象的指针
+ * @param size 分配大小
+ * @param alignment 对齐大小
+ * @return 成功返回 0，否则返回错误码
+ */
 static inline int ibgda_nic_control_alloc(struct ibgda_mem_object **pmobject,
                                           size_t size, size_t alignment) {
   assert(ibgda_nic_buf_location == IBGDA_MEM_TYPE_GPU ||
@@ -1124,6 +1292,11 @@ static inline int ibgda_nic_control_alloc(struct ibgda_mem_object **pmobject,
     return ibgda_host_mem_alloc(pmobject, size, alignment, true);
 }
 
+/*
+ * 释放 NIC 控制内存
+ *
+ * @param mobject 内存对象指针
+ */
 static inline void ibgda_nic_control_free(struct ibgda_mem_object *mobject) {
   assert(ibgda_nic_buf_location == IBGDA_MEM_TYPE_GPU ||
          ibgda_nic_buf_location == IBGDA_MEM_TYPE_HOST);
@@ -1133,6 +1306,14 @@ static inline void ibgda_nic_control_free(struct ibgda_mem_object *mobject) {
     ibgda_host_mem_free(mobject);
 }
 
+/*
+ * 创建 CQ (Completion Queue)
+ *
+ * @param pgcq 输出参数，指向创建的 CQ 结构的指针
+ * @param device IBGDA 设备指针
+ * @param cc 是否使用压缩 CQ (Collapsed CQ)
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_create_cq(struct ibgda_cq **pgcq, struct ibgda_device *device,
                            int cc = 1) {
   int status = 0;
@@ -1227,6 +1408,11 @@ out:
   return status;
 }
 
+/*
+ * 销毁 CQ
+ *
+ * @param gcq 指向要销毁的 CQ 结构的指针
+ */
 static void ibgda_destroy_cq(struct ibgda_cq *gcq) {
   if (!gcq)
     return;
@@ -1242,6 +1428,12 @@ static void ibgda_destroy_cq(struct ibgda_cq *gcq) {
   free(gcq);
 }
 
+/*
+ * 获取设备端的 CQ 信息
+ *
+ * @param dev_cq 输出参数，设备端 CQ 结构
+ * @param cq 主机端 CQ 结构指针
+ */
 static void ibgda_get_device_cq(nvshmemi_ibgda_device_cq_t *dev_cq,
                                 const struct ibgda_cq *cq) {
   dev_cq->cqn = cq->cqn;
@@ -1256,6 +1448,14 @@ static void ibgda_get_device_cq(nvshmemi_ibgda_device_cq_t *dev_cq,
       (__be32 *)((uintptr_t)cq->dbr_mobject->aligned.gpu_ptr + cq->dbr_offset);
 }
 
+/*
+ * 将 QP (Queue Pair) 状态从 RESET 转换为 INIT
+ *
+ * @param ep 端点指针
+ * @param device IBGDA 设备指针
+ * @param portid端口 ID
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_qp_rst2init(struct ibgda_ep *ep,
                              const struct ibgda_device *device, int portid) {
   int status = 0;
@@ -1310,6 +1510,15 @@ out:
   return status;
 }
 
+/*
+ * 将 DCI QP 状态从 INIT 转换为 RTR (Ready to Receive)
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param ep 端点指针
+ * @param device IBGDA 设备指针
+ * @param portid 端口 ID
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_dci_init2rtr(nvshmemt_ibgda_state_t *ibgda_state,
                               struct ibgda_ep *ep,
                               const struct ibgda_device *device, int portid) {
@@ -1357,6 +1566,16 @@ out:
   return status;
 }
 
+/*
+ * 将 RC QP 状态从 INIT 转换为 RTR
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param ep 端点指针
+ * @param device IBGDA 设备指针
+ * @param portid 端口 ID
+ * @param peer_ep_handle 对等端点句柄
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_rc_init2rtr(nvshmemt_ibgda_state_t *ibgda_state,
                              struct ibgda_ep *ep,
                              const struct ibgda_device *device, int portid,
@@ -1473,6 +1692,14 @@ out:
   return status;
 }
 
+/*
+ * 将 QP 状态从 RTR 转换为 RTS (Ready to Send)
+ *
+ * @param ep 端点指针
+ * @param device IBGDA 设备指针
+ * @param portid 端口 ID
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_qp_rtr2rts(struct ibgda_ep *ep,
                             const struct ibgda_device *device, int portid) {
   int status = 0;
@@ -1512,6 +1739,13 @@ out:
   return status;
 }
 
+/*
+ * 销毁内部缓冲区
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param device IBGDA 设备指针
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_destroy_internal_buffer(nvshmemt_ibgda_state_t *ibgda_state,
                                          struct ibgda_device *device) {
   int status = 0;
@@ -1536,6 +1770,15 @@ static int ibgda_destroy_internal_buffer(nvshmemt_ibgda_state_t *ibgda_state,
   return status;
 }
 
+/*
+ * 创建内部缓冲区
+ *
+ * @param internal_buf 输出参数，内部缓冲区结构指针
+ * @param ibgda_state IBGDA 状态指针
+ * @param device IBGDA 设备指针
+ * @param n_pes PE 数量
+ * @return 成功返回 0，否则返回错误码
+ */
 static int
 ibgda_create_internal_buffer(struct ibgda_internal_buffer *internal_buf,
                              nvshmemt_ibgda_state_t *ibgda_state,
@@ -1591,6 +1834,12 @@ out:
   return status;
 }
 
+/*
+ * 销毁 CQ 共享对象
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param device IBGDA 设备指针
+ */
 static void ibgda_destroy_cq_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
                                             struct ibgda_device *device) {
   if (device->cq_shared_object.dbr_mobject) {
@@ -1606,6 +1855,13 @@ static void ibgda_destroy_cq_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
   }
 }
 
+/*
+ * 销毁 QP 共享对象
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param device IBGDA 设备指针
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_destroy_qp_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
                                            struct ibgda_device *device) {
   int status = 0;
@@ -1654,6 +1910,14 @@ out:
   return status;
 }
 
+/*
+ * 创建 CQ 共享对象
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param device IBGDA 设备指针
+ * @param n_pes PE 数量
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_create_cq_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
                                           struct ibgda_device *device,
                                           int n_pes) {
@@ -1723,6 +1987,14 @@ out:
   return status;
 }
 
+/*
+ * 创建 QP 共享对象
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param device IBGDA 设备指针
+ * @param n_pes PE 数量
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_create_qp_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
                                           struct ibgda_device *device,
                                           int n_pes) {
@@ -1911,6 +2183,14 @@ out:
   return status;
 }
 
+/*
+ * 分配并映射 QP UAR (User Access Region)
+ *
+ * @param context IBV 上下文指针
+ * @param handler NIC 处理器类型
+ * @param out_mobject 输出参数，指向分配的内存对象的指针
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_alloc_and_map_qp_uar(struct ibv_context *context,
                                       ibgda_nic_handler_t handler,
                                       struct ibgda_mem_object **out_mobject) {
@@ -1989,6 +2269,11 @@ out:
   return status;
 }
 
+/*
+ * 解除映射并释放 QP UAR
+ *
+ * @param mobject 内存对象指针
+ */
 static void ibgda_unmap_and_free_qp_uar(struct ibgda_mem_object *mobject) {
   struct mlx5dv_devx_uar *uar = NULL;
 
@@ -2007,8 +2292,15 @@ static void ibgda_unmap_and_free_qp_uar(struct ibgda_mem_object *mobject) {
 }
 
 /**
- * Create a RC or DCI QP.
- * DCT creation is not handled by this function.
+ * 创建 RC 或 DCI QP
+ * DCT 创建不由此函数处理
+ *
+ * @param ep_ptr 输出参数，指向创建的端点结构的指针
+ * @param device IBGDA 设备指针
+ * @param portid 端口 ID
+ * @param qp_idx QP 索引
+ * @param qp_type QP 类型
+ * @return 成功返回 0，否则返回错误码
  */
 static int ibgda_create_qp(struct ibgda_ep **ep_ptr,
                            struct ibgda_device *device, int portid,
@@ -2190,6 +2482,14 @@ out:
   return status;
 }
 
+/*
+ * 获取 RC 句柄
+ *
+ * @param rc_handle 输出参数，RC 句柄指针
+ * @param ep 端点指针
+ * @param device IBGDA 设备指针
+ * @return 成功返回 0
+ */
 static int ibgda_get_rc_handle(struct ibgda_rc_handle *rc_handle,
                                const struct ibgda_ep *ep,
                                const struct ibgda_device *device) {
@@ -2206,6 +2506,14 @@ static int ibgda_get_rc_handle(struct ibgda_rc_handle *rc_handle,
   return 0;
 }
 
+
+/*
+ * 销毁 DCT 共享对象
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param device IBGDA 设备指针
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_destroy_dct_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
                                             struct ibgda_device *device) {
   int status = 0;
@@ -2240,6 +2548,14 @@ out:
   return status;
 }
 
+/*
+ * 创建 DCT 共享对象
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param device IBGDA 设备指针
+ * @param portid 端口 ID
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_create_dct_shared_objects(nvshmemt_ibgda_state_t *ibgda_state,
                                            struct ibgda_device *device,
                                            int portid) {
@@ -2369,6 +2685,15 @@ out:
   return status;
 }
 
+/*
+ * 创建 DCT (Dynamically Connected Transport)
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param ep_ptr 输出参数，指向创建的端点结构的指针
+ * @param device IBGDA 设备指针
+ * @param portid 端口 ID
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_create_dct(nvshmemt_ibgda_state_t *ibgda_state,
                             struct ibgda_ep **ep_ptr,
                             const struct ibgda_device *device, int portid) {
@@ -2460,6 +2785,14 @@ out:
   return status;
 }
 
+/*
+ * 获取 DCT 句柄
+ *
+ * @param dct_handle 输出参数，DCT 句柄指针
+ * @param ep 端点指针
+ * @param device IBGDA 设备指针
+ * @return 成功返回 0
+ */
 static int ibgda_get_dct_handle(struct ibgda_dct_handle *dct_handle,
                                 const struct ibgda_ep *ep,
                                 const struct ibgda_device *device) {
@@ -2475,6 +2808,12 @@ static int ibgda_get_dct_handle(struct ibgda_dct_handle *dct_handle,
   return 0;
 }
 
+/*
+ * 销毁端点 (Endpoint)
+ *
+ * @param ep 端点指针
+ * @return 成功返回 0
+ */
 static int ibgda_destroy_ep(struct ibgda_ep *ep) {
   int status = 0;
 
@@ -2513,6 +2852,13 @@ static int ibgda_destroy_ep(struct ibgda_ep *ep) {
   return status;
 }
 
+/*
+ * 获取设备 QP 管理变量
+ *
+ * @param dev_mvars 输出参数，指向设备 QP 管理变量结构的指针
+ * @param device IBGDA 设备指针
+ * @param ep 端点指针
+ */
 static void
 ibgda_get_device_qp_mvars(nvshmemi_ibgda_device_qp_management_t *dev_mvars,
                           struct ibgda_device *device,
@@ -2520,6 +2866,14 @@ ibgda_get_device_qp_mvars(nvshmemi_ibgda_device_qp_management_t *dev_mvars,
   memset(dev_mvars, 0, sizeof(*dev_mvars));
 }
 
+/*
+ * 获取设备 QP 信息
+ *
+ * @param dev_qp 输出参数，指向设备 QP 结构的指针
+ * @param device IBGDA 设备指针
+ * @param ep 端点指针
+ * @param selected_dev_idx 选定的设备索引
+ */
 static void ibgda_get_device_qp(nvshmemi_ibgda_device_qp_t *dev_qp,
                                 struct ibgda_device *device,
                                 const struct ibgda_ep *ep,
@@ -2590,6 +2944,13 @@ static void ibgda_get_device_qp(nvshmemi_ibgda_device_qp_t *dev_qp,
   ibgda_get_device_qp_mvars(&dev_qp->mvars, device, ep);
 }
 
+/*
+ * 获取设备 DCT 信息
+ *
+ * @param dev_dct 输出参数，指向设备 DCT 结构的指针
+ * @param dct_handle DCT 句柄指针
+ * @param device IBGDA 设备指针
+ */
 static void ibgda_get_device_dct(nvshmemi_ibgda_device_dct_t *dev_dct,
                                  const struct ibgda_dct_handle *dct_handle,
                                  const struct ibgda_device *device) {
@@ -2598,6 +2959,12 @@ static void ibgda_get_device_dct(nvshmemi_ibgda_device_dct_t *dev_dct,
       ((device->support_half_av_seg ? 0ULL : 1ULL) << 31) | dev_dct->dqp_dct);
 }
 
+/*
+ * 设置 GPU 状态
+ *
+ * @param t NVSHMEM 传输句柄
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_setup_gpu_state(nvshmem_transport_t t) {
   nvshmemt_ibgda_state_t *ibgda_state;
   ibgda_state = (nvshmemt_ibgda_state_t *)t->state;
@@ -2955,6 +3322,13 @@ out:
   return status;
 }
 
+/*
+ * 检查是否需要 CST
+ *
+ * @param device IBGDA 设备指针
+ * @param dev_id CUDA 设备 ID
+ * @return 如果需要 CST 返回 true，否则返回 false
+ */
 static bool ibgda_cst_is_required(struct ibgda_device *device,
                                   CUdevice dev_id) {
   bool rval = true;
@@ -2977,6 +3351,17 @@ static bool ibgda_cst_is_required(struct ibgda_device *device,
   return rval;
 }
 
+/*
+ * 创建 QP 集合
+ *
+ * @param t NVSHMEM 传输句柄
+ * @param selected_dev_ids 选定的设备 ID 数组
+ * @param num_selected_devs 选定的设备数量
+ * @param out_rc_handles 输出参数，RC 句柄指针
+ * @param out_handles_len 输出参数，句柄长度指针
+ * @param out_num_dci_eps 输出参数，DCI 端点数量指针
+ * @return 成功返回 0，否则返回错误码
+ */
 int nvshmemt_ibgda_create_qps(nvshmem_transport_t t, int *selected_dev_ids,
                               int num_selected_devs, void **out_rc_handles,
                               int *out_handles_len, int *out_num_dci_eps) {
@@ -3357,6 +3742,15 @@ out_already_connected:
   return status;
 }
 
+/*
+ * 连接所有端点 (Endpoints)
+ *
+ * @param t NVSHMEM 传输句柄
+ * @param selected_dev_ids 选定的设备 ID 数组
+ * @param num_selected_devs 选定的设备数量
+ * @param rc_handles RC 句柄数组
+ * @return 成功返回 0，否则返回错误码
+ */
 int nvshmemt_ibgda_connect_endpoints(nvshmem_transport_t t,
                                      int *selected_dev_ids,
                                      int num_selected_devs, void *rc_handles) {
@@ -3641,6 +4035,13 @@ out_already_connected:
   return status;
 }
 
+/*
+ * 释放内存句柄
+ *
+ * @param mem_handle 内存句柄指针
+ * @param t NVSHMEM 传输句柄
+ * @return 成功返回 0，否则返回错误码
+ */
 int nvshmemt_ibgda_release_mem_handle(nvshmem_mem_handle_t *mem_handle,
                                       nvshmem_transport_t t) {
   int status = 0;
@@ -3737,6 +4138,12 @@ out:
   return status;
 }
 
+/*
+ * 终结 IBGDA 传输
+ *
+ * @param transport NVSHMEM 传输句柄
+ * @return 成功返回 0，否则返回错误码
+ */
 int nvshmemt_ibgda_finalize(nvshmem_transport_t transport) {
   struct ibgda_device *device = NULL;
   assert(transport != NULL);
@@ -3851,6 +4258,16 @@ out:
   return status;
 }
 
+/*
+ * 添加设备远程内存句柄
+ *
+ * @param t NVSHMEM 传输句柄
+ * @param transport_stride 传输步长
+ * @param mem_handles 内存句柄数组
+ * @param heap_offset 堆偏移量
+ * @param size 大小
+ * @return 成功返回 0，否则返回错误码
+ */
 int nvshmemt_ibgda_add_device_remote_mem_handles(
     nvshmem_transport_t t, int transport_stride,
     nvshmem_mem_handle_t *mem_handles, uint64_t heap_offset, size_t size) {
@@ -3963,6 +4380,12 @@ out:
   return status;
 }
 
+/*
+ * 解析 NIC 映射内存类型请求
+ *
+ * @param str 请求字符串
+ * @return 解析后的请求类型
+ */
 static ibgda_nic_mapping_memtype_reqeust_t
 ibgda_parse_nic_mapping_memtype_request(const char *str) {
   std::string req = str;
@@ -3982,6 +4405,14 @@ ibgda_parse_nic_mapping_memtype_request(const char *str) {
     return IBGDA_NIC_MAPPING_MEMTYPE_REQUEST_AUTO;
 }
 
+/*
+ * 检查 NIC 映射内存类型
+ *
+ * @param ibgda_state IBGDA 状态指针
+ * @param device IBGDA 设备指针
+ * @param request_memtype 请求的内存类型
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_check_nic_mapping_memtypes(
     nvshmemt_ibgda_state_t *ibgda_state, struct ibgda_device *device,
     ibgda_nic_mapping_memtype_reqeust_t request_memtype) {
@@ -4063,6 +4494,12 @@ static int ibgda_check_nic_mapping_memtypes(
   return 0;
 }
 
+/*
+ * 检查 GPU 映射 NIC UAR
+ *
+ * @param device IBGDA 设备指针
+ * @return 成功返回 0，否则返回错误码
+ */
 static int ibgda_check_gpu_mapping_nic_uar(struct ibgda_device *device) {
   int status = 0;
 
@@ -4084,6 +4521,14 @@ out:
   return status;
 }
 
+/*
+ * 初始化 IBGDA 传输
+ *
+ * @param t NVSHMEM 传输句柄指针
+ * @param table CUDA 函数表
+ * @param api_version API 版本
+ * @return 成功返回 0，否则返回错误码
+ */
 int nvshmemt_init(nvshmem_transport_t *t, struct nvshmemi_cuda_fn_table *table,
                   int api_version) {
   struct nvshmemt_hca_info hca_list[MAX_NUM_HCAS];
