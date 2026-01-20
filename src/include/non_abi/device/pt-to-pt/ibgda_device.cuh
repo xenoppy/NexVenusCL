@@ -325,60 +325,109 @@ ibgda_write_rdma_write_wqe(nvshmemi_ibgda_device_qp_t *qp, uint64_t laddr,
   st_na_relaxed(reinterpret_cast<int4 *>(data_seg_ptr),
                 *reinterpret_cast<const int4 *>(&data_seg));
 }
-
+// 设备端函数，用于在warp级别执行非阻塞的RDMA写操作（PUT）
+// 该函数由warp中的所有线程协作执行
 __device__ static __forceinline__ void
-nvshmemi_ibgda_put_nbi_warp(uint64_t req_rptr, uint64_t req_lptr, size_t bytes,
-                            int dst_pe, int qp_id, int lane_id, int message_idx,
-                            p2pcomm_ibgda_device_state_t *state) {
-  // Get lkey and rkey, store them into lanes
-  uint32_t num_wqes = 0;
-  __be32 my_lkey = 0;
-  uint64_t my_laddr = 0;
-  __be32 my_rkey = 0;
-  uint64_t my_raddr = 0;
-  uint64_t my_chunk_size = 0;
+nvshmemi_ibgda_put_nbi_warp(uint64_t req_rptr,           // 远程端地址（目标地址）
+              uint64_t req_lptr,           // 本地端地址（源地址）
+              size_t bytes,                 // 需要传输的字节数
+              int dst_pe,                   // 目标处理单元ID
+              int qp_id,                    // 队列对ID
+              int lane_id,                  // 当前线程在warp中的ID（0-31）
+              int message_idx,              // 消息索引
+              p2pcomm_ibgda_device_state_t *state) {  // 设备状态指针
 
+  // 初始化WQE（Work Queue Element）相关变量
+  uint32_t num_wqes = 0;                // WQE数量计数器
+  __be32 my_lkey = 0;                   // 本地内存注册钥匙（大端格式）
+  uint64_t my_laddr = 0;                // 本地地址
+  __be32 my_rkey = 0;                   // 远程内存注册钥匙（大端格式）
+  uint64_t my_raddr = 0;                // 远程地址
+  uint64_t my_chunk_size = 0;           // 当前块的大小
+
+  // 定义最小块大小为128KB
   static size_t min_chunk_size = 128 * 1024;
+  // 计算平均块大小：将总字节数分成32个部分
   size_t average_chunk_size = (bytes + 32 - 1) / 32;
 
-  // auto state = ibgda_get_state();
+  // 从状态获取本地和远程内存注册钥匙
   my_lkey = state->lkey.key;
   my_rkey = state->rkey.key;
 
-  // Decide how many messages (theoretically 3 for maximum)
+  // 循环计算需要多少个WQE来完成数据传输（理论上最多3个）
   auto remaining_bytes = bytes;
   while (remaining_bytes > 0) {
+    // 仅当前线程ID等于WQE数量时，才计算该线程负责的数据块信息
     if (lane_id == num_wqes) {
-      my_laddr = req_lptr;
-      my_raddr = req_rptr;
+      my_laddr = req_lptr;                // 设置本地地址
+      my_raddr = req_rptr;                // 设置远程地址
+      // 计算当前块的大小：取剩余字节数、最小块大小、平均块大小中的较大值
       my_chunk_size =
-          min(remaining_bytes, max(min_chunk_size, average_chunk_size));
+        min(remaining_bytes, max(min_chunk_size, average_chunk_size));
     }
-    // Move one more message
+    
+    // 使用warp级别的shuffle指令，将当前WQE对应线程的chunk_size广播给warp中的所有线程
     auto chunk_size =
-        __shfl_sync(0xffffffff, my_chunk_size, static_cast<int>(num_wqes));
+      /**
+       * @brief 使用shuffle操作在warp中广播chunk_size值
+       * 
+       * 该指令使用NVIDIA的warp级别shuffle原语从lane num_wqes的线程读取my_chunk_size
+       * 并将其广播给warp中的所有线程（全32个线程）。
+       * 掩码0xffffffff使能warp中的所有线程参与shuffle操作。
+       * 
+       * @param mask 0xffffffff - 使能所有32个线程参与shuffle
+       * @param my_chunk_size - 源值，从源lane读取
+       * @param num_wqes - 源lane索引（0-31），指定从哪个线程读取值
+       * 
+       * @return 从lane num_wqes的线程读取的my_chunk_size值，分发给所有线程
+       */
+      __shfl_sync(0xffffffff, my_chunk_size, static_cast<int>(num_wqes));
+    
+    // 减少剩余字节数
     remaining_bytes -= chunk_size;
+    // 移动本地地址指针
     req_lptr += chunk_size;
+    // 移动远程地址指针
     req_rptr += chunk_size;
+    // 增加WQE计数器
     ++num_wqes;
   }
+  
+  // 断言：WQE数量不能超过32个（warp中的线程数）
   EP_DEVICE_ASSERT(num_wqes <= 32);
-  // Process WQE
+  
+  // 获取目标PE对应的队列对
   auto qp = ibgda_get_rc(dst_pe, qp_id, state);
+  
+  // 初始化基础WQE索引
   uint64_t base_wqe_idx = 0;
+  
+  // 仅线程0预留足够的WQE槽位
   if (lane_id == 0)
     base_wqe_idx = ibgda_reserve_wqe_slots(qp, num_wqes);
+  
+  // 将基础WQE索引从线程0广播给warp中的所有线程
   base_wqe_idx = __shfl_sync(0xffffffff, base_wqe_idx, 0);
+  
+  // 每个线程处理分配给它的WQE（线程ID < WQE数量）
   if (lane_id < num_wqes) {
+  // 获取该线程对应WQE的内存指针
     auto wqe_ptr = ibgda_get_wqe_ptr(qp, base_wqe_idx + lane_id);
+    // 写入RDMA写操作的WQE信息
     ibgda_write_rdma_write_wqe(qp, my_laddr, my_lkey, my_raddr, my_rkey,
-                               my_chunk_size, base_wqe_idx, &wqe_ptr);
+                  my_chunk_size, base_wqe_idx, &wqe_ptr);
   }
+  
+  // 同步warp中的所有线程，确保所有WQE都已写入
   __syncwarp();
 
-  // Submit
+  // 提交请求到硬件队列
+  // 仅线程0执行提交操作
   if (lane_id == 0)
-    ibgda_submit_requests<false>(qp, base_wqe_idx, num_wqes, message_idx);
+  // 模板参数false表示不总是立即post_send，可能进行批处理
+  ibgda_submit_requests<false>(qp, base_wqe_idx, num_wqes, message_idx);
+  
+  // 再次同步warp中的所有线程，确保提交操作完成
   __syncwarp();
 }
 

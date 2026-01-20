@@ -48,23 +48,36 @@ __global__ void p2p_client_put_kernel(void *remote_buf, void *local_buf,
                                       size_t size, int dspe,
                                       p2pcomm_ibgda_device_state_t *state,
                                       size_t flag_offset) {
+  // 1. 获取当前线程在 Warp 内的 ID 和全局 Warp ID
   const int lane_id = threadIdx.x % 32;
   const auto warp_id = threadIdx.x / 32;
   const auto num_warps = blockDim.x / 32;
+
+  // 2. 将总数据大小切分为块，每个 Warp 负责处理一个 chunk
   const auto chunk_size = (size + num_warps - 1) / num_warps;
   auto offset = warp_id * chunk_size;
   auto data_size = min(chunk_size, size - offset);
 
+  // 3. 执行 Warp 级别的非阻塞隐式 PUT 操作 (RDMA Write)
+  // 此操作由 Warp 内的 32 个线程协作拼装 WQE 并直接写入网卡 Doorbell
   ibgda_p2p::nvshmemi_ibgda_put_nbi_warp(
       (uint64_t)remote_buf + offset, (uint64_t)local_buf + offset, chunk_size,
       dspe, warp_id, lane_id, 0, state);
+
+  // 4. 系统级内存屏障，确保 PUT 请求已经提交到硬件队列
   __threadfence_system();
+
+  // 5. 信号通知阶段：每个 Warp 的 0 号线程负责向远程发送一个原子加信号
   if (lane_id == 0) {
+    // 计算远程 flag 的位置，用于通知服务器数据已就绪
     int *flag_ptr =
         (int *)((char *)remote_buf + flag_offset + warp_id * sizeof(int));
+    // 发起远程原子加操作 (RDMA AMO)，将 flag 值加 1
     ibgda_p2p::nvshmemi_ibgda_amo_nonfetch_add(flag_ptr, 1, dspe, warp_id,
                                                state);
   }
+
+  // 6. 再次同步，确保所有操作顺序完成
   __threadfence_system();
 }
 // Note: multiply_kernel is now multiply_buffer_kernel in p2p_utils.cuh
@@ -155,6 +168,15 @@ struct BufferSetup {
   size_t flag_offset;
 };
 
+
+/*
+1. Allocate device buffer
+2. If client, initialize with random data; if server, fill with zeros
+3. Save device pointer to file for peer access: 用文件让双方同时能访问到对方的device pointer, 模拟建立连接时的建立映射表
+4. Register memory with P2PComm：就是告诉P2PComm这个buffer可以被远程访问 register_memory
+5. Exchange memory handles with peer
+6. Read remote device pointer from file
+*/
 BufferSetup setup_buffers(P2PComm &comm, bool is_client,
                           const std::string &self_prefix,
                           const std::string &peer_prefix) {

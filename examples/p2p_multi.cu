@@ -315,62 +315,78 @@ prepare_device_params(const std::map<std::string, P2PComm *> &comm_map,
 void run_benchmarks(void **d_remote_ptrs, void *buf,
                     p2pcomm_ibgda_device_state_t **d_states, size_t num,
                     bool is_client, int client_idx, int *d_errors) {
-  int iteration = BENCHMARK_ITERATIONS;
+  // 设置总迭代次数（包含预热期）
+  int iteration = BENCHMARK_ITERATIONS; 
+  
+  // 外层循环：遍历数据包大小，从 8 字节开始，每次翻倍，直到 8MB (8 << 20)
   for (int buf_size = 8; buf_size <= (8 << 20); buf_size *= 2) {
-    float total_ms = 0.0;
-    int threads = (buf_size <= 32) ? 32 : min(256, buf_size);
+    float total_ms = 0.0; // 用于累计非预热迭代的总耗时
+    
+    // 根据数据大小动态计算线程数：小于 32 字节用 32 线程，大则取 buf_size 与 256 的最小值
+    int threads = (buf_size <= 32) ? 32 : min(256, buf_size); 
 
-    // Initialize data pattern before testing this buffer size (client only)
+    // 仅客户端：在测试该数据大小时，先初始化本地 buffer 的数据模式以供后续比对
     if (is_client) {
       init_data_pattern_kernel<<<num, 256>>>((float *)buf, buf_size, client_idx,
                                              ALLOC_BUF_PER_ENDPOINT);
-      cudaDeviceSynchronize();
+      cudaDeviceSynchronize(); // 等待 GPU 初始化完成
     }
 
+    // 执行多次迭代进行压测
     for (int i = 0; i < iteration; ++i) {
-      if (is_client) {
+      if (is_client) { // 客户端逻辑：执行数据传输并计时
         cudaEvent_t start, stop;
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
-        cudaEventRecord(start);
+        cudaEventCreate(&start); // 创建计时开始事件
+        cudaEventCreate(&stop);  // 创建计时结束事件
+        cudaEventRecord(start); // 记录开始时间
 
+        // 调用 PUT Kernel：将本地数据推送到所有远程端点
         p2p_client_put_kernel<<<num, threads>>>(d_remote_ptrs, buf, buf_size, 0,
                                                 ALLOC_BUF_PER_ENDPOINT,
                                                 d_states, i);
+        // 调用 GET Kernel：从所有远程端点拉回数据
         p2p_get_kernel<<<num, threads>>>(d_remote_ptrs, buf, buf_size, 0,
                                          ALLOC_BUF_PER_ENDPOINT, d_states, i);
 
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
+        cudaEventRecord(stop); // 记录结束时间
+        cudaDeviceSynchronize(); // 关键同步：确保 GPU 任务完成
 
         float ms = 0;
-        cudaEventElapsedTime(&ms, start, stop);
+        cudaEventElapsedTime(&ms, start, stop); // 计算本次迭代的毫时
 
+        // 排除掉前几轮的预热记录（WARMUP_ITERATIONS），只累加稳定期的时间
         if (i >= WARMUP_ITERATIONS) {
           total_ms += ms;
         }
 
-        cudaEventDestroy(start);
+        cudaEventDestroy(start); // 销毁计时资源
         cudaEventDestroy(stop);
-      } else {
+      } else { 
+        // 服务端逻辑：不计时，只负责轮询/响应客户端的事务
         p2p_server_poll_kernel<<<num, threads>>>(buf, ALLOC_BUF_PER_ENDPOINT,
                                                  buf_size, i);
       }
     }
 
+    // 确保该数据大小下的所有 GPU 操作彻底完成
     cudaDeviceSynchronize();
 
-    // Verify data correctness after all iterations for this buffer size
+    // 仅客户端：验证数据正确性
     if (is_client) {
-      cudaMemset(d_errors, 0, sizeof(int));
+      cudaMemset(d_errors, 0, sizeof(int)); // 清零 GPU 端错误计数器
+      // 检查 GET 回来的数据是否与预期模式一致
       verify_data_pattern_kernel<<<num, 256>>>(
           (float *)buf, buf_size, client_idx, ALLOC_BUF_PER_ENDPOINT, d_errors);
       cudaDeviceSynchronize();
 
       int errors = 0;
+      // 将 GPU 计算的错误数拷贝回主机内存
       cudaMemcpy(&errors, d_errors, sizeof(int), cudaMemcpyDeviceToHost);
 
+      // 计算有效迭代的平均耗时
       float avg_ms = total_ms / (iteration - WARMUP_ITERATIONS);
+      
+      // 输出该包大小的测试结果（耗时及是否通过）
       if (errors == 0) {
         std::cout << buf_size << "\t\t" << avg_ms << "\t\t✓ PASS" << std::endl;
       } else {

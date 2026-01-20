@@ -16,6 +16,14 @@
  * @file p2pcomm.cpp
  * @brief P2P Communication entry API implementation
  *
+ * This file serves as the Host-side Control Plane orchestrator for the P2P communication module.
+ * It is responsible for:
+ * 1. Managing GPU memory allocation and registration with InfiniBand hardware.
+ * 2. Initializing the IBGDA transport layer and managing Queue Pairs (QPs).
+ * 3. Handling the "handshake" process by exporting/importing connection and memory handles.
+ * 4. Synchronizing control-plane metadata (like LKey, RKey, and QP pointers) to the GPU 
+ *    device state, which allows kernels to perform zero-copy RDMA operations autonomously.
+ *
  */
 #include "device_host_transport/nvshmem_common_ibgda.h"
 #include "host/p2pcomm_api.h"
@@ -37,6 +45,13 @@ int global_init_status = 0;
 // map from aligned pointer to original pointer
 std::unordered_map<void *, void *> p2pcomm_mem_map;
 
+/**
+ * @brief Allocates aligned GPU memory and configures synchronization attributes.
+ * 
+ * This function uses cudaMalloc but adds alignment handling and sets the 
+ * CU_POINTER_ATTRIBUTE_SYNC_MEMOPS attribute to ensure memory operations 
+ * are properly synchronized across the bus.
+ */
 void *p2pcomm_malloc(size_t size, size_t alignment) {
   int status = 0;
   void *ptr = nullptr;
@@ -83,6 +98,9 @@ out:
   return aligned_ptr;
 }
 
+/**
+ * @brief Frees GPU memory by looking up the original unaligned pointer.
+ */
 int p2pcomm_free(void *dptr) {
   if (dptr == nullptr) {
     return 0;
@@ -139,6 +157,9 @@ out:
   return status;
 }
 
+/**
+ * @brief Initializes the P2PComm instance, transport layer, and allocated device state.
+ */
 int P2PComm::init() {
   if (initialized) {
     return 0;
@@ -172,6 +193,9 @@ out:
   return status;
 }
 
+/**
+ * @brief Registers a GPU memory region with the IBGDA transport to obtain DMA keys.
+ */
 int P2PComm::register_memory(void *dptr, size_t size) {
   // check if get_mem_handle is supported
   if (!NVSHMEMI_TRANSPORT_OPS_IS_GET_MEM(trans)) {
@@ -184,15 +208,24 @@ int P2PComm::register_memory(void *dptr, size_t size) {
       false);
 }
 
+/**
+ * @brief Deregisters memory and releases associated hardware resources.
+ */
 int P2PComm::deregister_memory(void *dptr) {
   return trans->host_ops.release_mem_handle(
       (nvshmem_mem_handle_t *)(&(mem_handle[pe])), trans);
 }
 
+/**
+ * @brief Exports the local memory handle (keys) as a serialized string for exchange.
+ */
 std::string P2PComm::get_local_mem_handle() const {
   return std::string(mem_handle[pe].reserved, NVSHMEM_MEM_HANDLE_SIZE);
 }
 
+/**
+ * @brief Imports a remote memory handle, allowing the local GPU to target the peer's memory.
+ */
 int P2PComm::set_remote_mem_handle(const std::string &handle) {
   int status = 0;
   if (handle.size() != NVSHMEM_MEM_HANDLE_SIZE) {
@@ -206,11 +239,17 @@ out:
   return status;
 }
 
+/**
+ * @brief Exports the local connection descriptor (QP info) for establishing P2P links.
+ */
 std::string P2PComm::get_local_conn_handle() const {
   size_t chunk_size = rc_handles_len / 2;
   return std::string((char *)rc_handles + (1 ^ pe) * chunk_size, chunk_size);
 }
 
+/**
+ * @brief Establishes an RC connection with the remote peer using its connection handle.
+ */
 int P2PComm::connect_endpoint(const std::string &conn_handle) {
   int status = 0;
   int selected_devices[1] = {0};
@@ -232,6 +271,9 @@ out:
   return status;
 }
 
+/**
+ * @brief Finalizes the P2PComm instance and releases all associated CPU/GPU memory.
+ */
 int P2PComm::fini() {
   int status = 0;
   bool failed = false;
@@ -251,7 +293,7 @@ int P2PComm::fini() {
 }
 
 /**
- * @brief Convert nvshmemi_ibgda_device_state_t to p2pcomm_ibgda_device_state_t
+ * @brief Converted internal metadata into a compact struct for GPU-side kernel access.
  */
 static int convert_device_state(p2pcomm_ibgda_device_state_t &p2p_st,
                                 const nvshmemi_ibgda_device_state_t &nvshmem_st,
@@ -273,6 +315,9 @@ static int convert_device_state(p2pcomm_ibgda_device_state_t &p2p_st,
   return 0;
 }
 
+/**
+ * @brief Synchronizes the latest control-plane metadata to the GPU memory.
+ */
 int P2PComm::update_device_state_d() {
   int status = 0;
   p2pcomm_ibgda_device_state_t tmp;

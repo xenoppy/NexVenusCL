@@ -87,7 +87,13 @@ typedef nvshmem_mem_handle_t p2pcomm_mem_handle_t;
  * @brief P2P Communication class.
  * This class provides an interface for peer-to-peer communication using IBGDA
  * transport.
+ * Note on the "final" specifier:
+ *  - The class is declared "final", which prevents inheritance. It signals that
+ *    the class is not intended to be a base class and prohibits deriving other
+ *    classes from it (helps the compiler optimize and avoid virtual dispatch
+ *    surprises).
  */
+
 class P2PComm final {
 public:
   P2PComm(bool isClient) {
