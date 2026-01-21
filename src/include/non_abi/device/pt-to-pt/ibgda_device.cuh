@@ -354,7 +354,7 @@ nvshmemi_ibgda_put_nbi_warp(uint64_t req_rptr,           // 远程端地址（�
   my_lkey = state->lkey.key;
   my_rkey = state->rkey.key;
 
-  // 循环计算需要多少个WQE来完成数据传输（理论上最多3个）
+  // 循环计算需要多少个WQE来完成数据传输（理论上最多32个）
   auto remaining_bytes = bytes;
   while (remaining_bytes > 0) {
     // 仅当前线程ID等于WQE数量时，才计算该线程负责的数据块信息
